@@ -65,7 +65,7 @@
     return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
   };
   function persist() { try { localStorage.setItem(KEY, JSON.stringify(preferences)); } catch (_) {} }
-  function apply() {
+  function apply(redrawControls = true) {
     const mode = effectiveMode(), config = preferences.schemes[mode], root = document.documentElement;
     root.dataset.theme = mode;
     root.style.colorScheme = mode;
@@ -80,7 +80,7 @@
       toggle.setAttribute('aria-label', 'Switch to ' + (mode === 'dark' ? 'light' : 'dark') + ' mode');
       toggle.firstChild.textContent = mode === 'dark' ? '☀ ' : '☾ ';
     }
-    refreshEditor();
+    if (redrawControls) refreshEditor();
   }
   function setMode(mode) {
     if (!['dark','light','system'].includes(mode)) return;
@@ -125,9 +125,13 @@
         '" aria-label="Apply ' + preset.label + ' palette"><span class="preset-preview"><span></span><i></i></span>' +
         '<strong>' + preset.label + '</strong></button>';
     }).join('');
-    const config = preferences.schemes[mode];
+    updateContrast();
+  }
+  function updateContrast() {
+    const config = preferences.schemes[effectiveMode()];
     const ratio = contrast(config.text, config.surface);
     const display = document.getElementById('contrastStatus');
+    if (!display) return;
     display.classList.toggle('contrast-warning', ratio < 4.5);
     display.textContent = 'Text contrast on panels: ' + ratio.toFixed(1) +
       ':1 · ' + (ratio < 4.5 ? 'Low contrast — adjust primary text or panel color.' : 'Meets WCAG AA for normal text.');
@@ -154,7 +158,10 @@
       const field = event.target.dataset.colorPicker;
       if (!field || !fields.some(([n]) => n === field)) return;
       preferences.schemes[effectiveMode()][field] = event.target.value.toUpperCase();
-      persist(); apply();
+      persist(); apply(false);
+      const textInput = dialog.querySelector('[data-color-hex="' + field + '"]');
+      if (textInput) textInput.value = event.target.value.toUpperCase();
+      updateContrast();
     });
     dialog.addEventListener('change', (event) => {
       const field = event.target.dataset.colorHex;

@@ -16,3 +16,5 @@ jobs:
       - run: python -m compileall -q backend
       - run: pytest -q
       - run: node --check frontend/app.js
+      - run: node --check frontend/theme.js
+      - run: node --test tests/theme.test.cjs

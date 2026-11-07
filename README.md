@@ -28,6 +28,18 @@
 | Evidence vault | Source filename, size, upload status, SHA-256 fingerprint |
 | Chainsaw engine | Configuration status, optional on-demand hunting, raw results |
 
+## Appearance and event inspection
+
+The dashboard now provides an **Appearance** panel in the top bar:
+
+- Switch between **dark**, **light**, or **system-matched** mode. Use the adjacent quick-toggle to swap light and dark instantly.
+- Start from four coordinated palettes: **Atlas blue**, **Forest**, **Orchid**, and **Ember**.
+- Edit **11 independent colors**: page background, sidebar, cards, raised surfaces, borders, primary/secondary text, accent, success, warning and danger.
+- Watch changes live; a contrast indicator warns when panel text falls below a 4.5:1 ratio.
+- Settings for light and dark modes are stored separately in the browser's `localStorage`. They survive refreshes but are **not** shared across browsers or users. **Reset current mode** restores the default colors for the active mode.
+
+Clicking an event now opens a **right-hand inspector** with a summary, timestamp, and (when present) command line visible immediately. Four tabs — **Overview**, **All fields**, **JSON**, **Original XML** — keep the raw source accessible without stacking huge data blocks in one scrolling dialog. Event 4688 rows also show the executed process basename and command-line preview directly in the explorer.
+
 ## Quick start (Docker)
 
 Prerequisite: Docker and the Compose plugin.

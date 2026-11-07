@@ -207,3 +207,5 @@ input:focus,textarea:focus,select:focus{border-color:var(--tf-accent);box-shadow
 @media(prefers-reduced-motion:reduce){
   .button{transition:none}
 }
+
+.finding-card>p{color:var(--tf-muted)}
