@@ -4,6 +4,28 @@
 
 > **Status: v0.2.0 MVP.** A usable starting point for individual analysts and DFIR labs, not a production-grade multi-user SOC platform. No authentication is implemented: **do not expose this deployment to the public internet.**
 
+### Screenshots
+
+<details open>
+  <summary>❯ Screenshot 1 Dashboard</summary>
+
+  <img width="850" alt="Dashboard"
+       src="https://github.com/user-attachments/assets/c3038aed-4750-45f4-933e-c4a505602427" />
+</details>
+
+<details>
+  <summary>❯ Screenshot 2 Features</summary>
+
+  <img width="850" src="https://github.com/user-attachments/assets/c1c6fad3-62ae-47ae-97ec-487606179c70" />
+</details>
+
+<details>
+  <summary>❯ Screenshot 3 Settings</summary>
+
+  <img width="850" src="https://github.com/user-attachments/assets/ce470b01-e3d3-4bb5-9c95-ebd8c9084d3f" />
+</details>
+
+
 ## Features
 
 - Responsive, build-free, themeable web dashboard with seven investigative views
