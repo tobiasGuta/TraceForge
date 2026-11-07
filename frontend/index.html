@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080d17">
+  <meta name="description" content="TraceForge — evidence-driven Windows forensic investigation.">
+  <title>TraceForge · DFIR Workspace</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Workspace navigation">
+      <a class="brand" href="/" aria-label="TraceForge home">
+        <span class="brand-mark" aria-hidden="true">T<span>F</span></span>
+        <span class="brand-name">TRACE<span>FORGE</span><small>DFIR WORKSPACE</small></span>
+      </a>
+      <div class="side-section">WORKSPACE</div>
+      <nav class="nav-list" id="nav">
+        <button class="nav-link active" data-view="overview"><span class="nav-symbol">◫</span>Overview</button>
+        <button class="nav-link" data-view="events"><span class="nav-symbol">⌕</span>Event explorer</button>
+        <button class="nav-link" data-view="timeline"><span class="nav-symbol">◷</span>Timeline</button>
+        <button class="nav-link" data-view="findings"><span class="nav-symbol">◇</span>Findings</button>
+        <button class="nav-link" data-view="evidence"><span class="nav-symbol">▤</span>Evidence vault</button>
+        <button class="nav-link" data-view="chainsaw"><span class="nav-symbol">⌘</span>Chainsaw engine</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="storage-note"><span class="status-dot"></span><div><b>LOCAL WORKSPACE</b><small>Evidence stays on your host</small></div></div>
+        <div class="sidebar-version">TRACEFORGE <span>v0.1.0 · MVP</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span class="crumb-muted">Workspace</span><span class="crumb-separator">/</span><span id="crumb">Overview</span></div>
+        <div class="top-actions">
+          <label class="sr-only" for="casePicker">Active case</label>
+          <select id="casePicker" aria-label="Select active case"><option value="">No cases yet</option></select>
+          <button class="button button-outline button-sm" data-action="new-case">+ New case</button>
+          <button class="button button-primary button-sm" id="uploadTop" data-action="upload" hidden>Upload EVTX</button>
+        </div>
+      </header>
+      <div class="content" id="content" aria-live="polite">
+        <div class="loading-state"><span class="spinner"></span><p>Opening your workspace…</p></div>
+      </div>
+      <footer class="footer">TraceForge · Evidence first, conclusions second. <span>Self-hosted forensic workspace</span></footer>
+    </main>
+  </div>
+
+  <dialog id="caseDialog" class="modal">
+    <form id="caseForm">
+      <div class="modal-head"><div><div class="eyebrow">INVESTIGATION SETUP</div><h2>Create a case</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close">×</button></div>
+      <label for="caseName">Case name</label>
+      <input id="caseName" name="name" required maxlength="120" placeholder="e.g. Suspicious sign-in investigation" autofocus>
+      <label for="caseDescription">Description <span class="muted">(optional)</span></label>
+      <textarea id="caseDescription" name="description" maxlength="1500" rows="3" placeholder="What are you investigating?"></textarea>
+      <div class="modal-actions"><button class="button button-outline" type="button" data-action="close-dialog">Cancel</button><button class="button button-primary" type="submit">Create case</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="uploadDialog" class="modal">
+    <form id="uploadForm">
+      <div class="modal-head"><div><div class="eyebrow">PRESERVE &amp; INDEX</div><h2>Upload Windows evidence</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close">×</button></div>
+      <p class="modal-text">Upload a native <code>.evtx</code> event log (25 MB maximum). TraceForge preserves the original bytes, calculates SHA-256, and indexes the events.</p>
+      <label class="dropzone" for="evtxFile"><span class="drop-icon">⇧</span><strong>Choose an EVTX file</strong><small>Windows Event Log · .evtx · max 25 MB</small></label>
+      <input id="evtxFile" type="file" accept=".evtx" required>
+      <p id="selectedFile" class="selected-file">No file selected</p>
+      <div class="modal-actions"><button class="button button-outline" type="button" data-action="close-dialog">Cancel</button><button id="uploadSubmit" class="button button-primary" type="submit">Upload &amp; analyze</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="eventDialog" class="modal modal-wide">
+    <div class="modal-head"><div><div class="eyebrow">SOURCE RECORD</div><h2>Event details</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close">×</button></div>
+    <div id="eventDetails"></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

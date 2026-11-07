@@ -1,0 +1,10 @@
+.traceforge/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+node_modules/
+.DS_Store

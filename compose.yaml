@@ -1,0 +1,20 @@
+services:
+  traceforge:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8000"
+    environment:
+      TRACEFORGE_DATA_DIR: /data
+      # Optional integrations: mount binaries and rules yourself, then set:
+      # CHAINSAW_BIN: /usr/local/bin/chainsaw
+      # CHAINSAW_RULES_DIR: /rules/chainsaw
+      # SIGMA_RULES_DIR: /rules/sigma
+      # CHAINSAW_MAPPING_FILE: /rules/mappings/sigma-event-logs-all.yml
+    volumes:
+      - traceforge-data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  traceforge-data:
