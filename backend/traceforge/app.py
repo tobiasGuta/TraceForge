@@ -220,11 +220,11 @@ def list_events(case_id: str, q: str = Query(default="", max_length=200),
     if field_value and not field_key:
         raise HTTPException(422, "Choose a field name when filtering by field value")
     if field_key:
-        term = "%" + field_value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        term = "%" + field_value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
         where.append("""EXISTS(
             SELECT 1 FROM json_each(events.data_json) AS field
             WHERE field.key = ?
-              AND CAST(field.value AS TEXT) LIKE ? ESCAPE '\'
+              AND CAST(field.value AS TEXT) LIKE ? ESCAPE '!'
         )""")
         params.extend([field_key, term])
     if q:

@@ -247,7 +247,7 @@ def event_context(
     note = (
         "Same-host nearby events are temporal context, not proof of causality. "
         "GUID relationships use Sysmon process GUIDs; PID relationships are candidates "
-        "because PIDs can be reused. Correlation is restricted to a 24-hour window."
+        "because PID reuse is possible. Correlation is restricted to a 24-hour window."
     ) if can_correlate else (
         "The selected event is not a recognized process creation. Showing only "
         "same-host events in the selected time window."
