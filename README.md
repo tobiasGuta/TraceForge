@@ -7,7 +7,7 @@
 ## Features
 
 - Responsive, build-free dark web dashboard with six investigative views
-- Create cases and upload native Windows \`.evtx\` files (25 MB per upload)
+- Create cases and upload native Windows `.evtx` files (25 MB per upload)
 - Preserve original uploaded bytes under generated IDs, compute SHA-256 at ingestion
 - Normalize Windows event metadata while retaining original record XML
 - Search Event ID, host, provider, account, and event payload; inspect exact source records
@@ -32,59 +32,59 @@
 
 Prerequisite: Docker and the Compose plugin.
 
-\`\`\`bash
+```bash
 git clone https://github.com/tobiasGuta/TraceForge.git
 cd TraceForge
 docker compose up --build -d
-\`\`\`
+```
 
 Open **http://127.0.0.1:8080**. Create a case, then upload an EVTX file.
 
 To stop the app:
 
-\`\`\`bash
+```bash
 docker compose down
-\`\`\`
+```
 
-Uploaded evidence and SQLite data live in the named \`traceforge-data\` volume. \`docker compose down -v\` **deletes that data**.
+Uploaded evidence and SQLite data live in the named `traceforge-data` volume. `docker compose down -v` **deletes that data**.
 
-The Compose port is intentionally bound to \`127.0.0.1\`. Do not change this to \`0.0.0.0\` or deploy it publicly without implementing authentication, HTTPS, access controls, and a hardened upload-processing boundary.
+The Compose port is intentionally bound to `127.0.0.1`. Do not change this to `0.0.0.0` or deploy it publicly without implementing authentication, HTTPS, access controls, and a hardened upload-processing boundary.
 
 ## Local development
 
 Requires Python 3.11+.
 
-\`\`\`bash
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn traceforge.app:app --app-dir backend --reload --host 127.0.0.1 --port 8000
-\`\`\`
+```
 
 Visit **http://127.0.0.1:8000**. The frontend is plain HTML/CSS/JavaScript, deliberately without a Node build step. The initial MVP optimizes for auditability and easy self-hosting. A React/TypeScript migration is possible later.
 
 Run tests:
 
-\`\`\`bash
+```bash
 pytest -q
 node --check frontend/app.js
-\`\`\`
+```
 
 ## Optional Chainsaw integration
 
 TraceForge does **not** ship, auto-download, or modify Chainsaw, Sigma rules, or rule packs. To enable it in a local development shell, install a Chainsaw executable yourself and configure at least one supported rule source:
 
-\`\`\`bash
+```bash
 export CHAINSAW_BIN=/absolute/path/to/chainsaw
 export CHAINSAW_RULES_DIR=/absolute/path/to/chainsaw-rules
 # OR use Sigma:
 export SIGMA_RULES_DIR=/absolute/path/to/sigma/rules
 export CHAINSAW_MAPPING_FILE=/absolute/path/to/chainsaw/mappings/sigma-event-logs-all.yml
-\`\`\`
+```
 
 For Docker, bind-mount the executable **and any runtime dependencies** plus rules directories as read-only volumes, and set these environment variables in a Compose override. The default image intentionally does **not** include Chainsaw.
 
-When configured, use **Chainsaw engine → Run Chainsaw hunt**. The backend executes \`chainsaw hunt\` with \`--json -q\` and configured \`-r\` / \`-s --mapping\` arguments; it does not invoke a shell. JSON is kept as returned because different rule collections/Chainsaw versions may emit different shapes. A run is bounded to 120 seconds, 25 evidence files, and 8 MB of result text. Carefully assess the binary and rule sources before enabling this feature.
+When configured, use **Chainsaw engine → Run Chainsaw hunt**. The backend executes `chainsaw hunt` with `--json -q` and configured `-r` / `-s --mapping` arguments; it does not invoke a shell. JSON is kept as returned because different rule collections/Chainsaw versions may emit different shapes. A run is bounded to 120 seconds, 25 evidence files, and 8 MB of result text. Carefully assess the binary and rule sources before enabling this feature.
 
 ## Built-in detection notes
 
@@ -98,13 +98,13 @@ Event ID 4104 (PowerShell script block) and 4624 (successful logon) are **not** 
 - SHA-256 is calculated during upload; source records retain their XML. Timestamps are preserved from the source log and displayed in the viewer's locale.
 - Indexed event metadata and original record XML live in SQLite. File indexing is atomic at the database transaction level: a failed parse is recorded, but does not leave partially indexed events.
 - Upload limit: **25 MB/file**. Indexing limit: **100,000 events/file**.
-- Search currently uses SQLite \`LIKE\`, not a full-text index. Timeline shows the **earliest 200 events**, not a complete large-case correlation engine.
-- Failed uploads with a valid EVTX header remain in the evidence vault with \`failed\` status for investigation.
+- Search currently uses SQLite `LIKE`, not a full-text index. Timeline shows the **earliest 200 events**, not a complete large-case correlation engine.
+- Failed uploads with a valid EVTX header remain in the evidence vault with `failed` status for investigation.
 - Reports capture the case, stored SHA-256 values, and linked built-in findings; analyst notes, full custody attestations, and Chainsaw findings normalization are future work.
 
 ## Architecture
 
-\`\`\`text
+```text
 Browser (localhost only)
        |
 FastAPI serves UI + JSON API
@@ -113,17 +113,17 @@ FastAPI serves UI + JSON API
        +-- Evidence store (original .evtx, SHA-256)
        +-- python-evtx parser
        +-- [optional] external Chainsaw executable + user-provided rules
-\`\`\`
+```
 
 Project layout:
 
-\`\`\`text
+```text
 backend/traceforge/   FastAPI app, database, EVTX parser, Chainsaw adapter
 frontend/             Build-free dashboard UI
 tests/                API and parser tests
 compose.yaml          Loopback-only local deployment
 .github/workflows/    Continuous integration checks
-\`\`\`
+```
 
 ## Security and scope
 
