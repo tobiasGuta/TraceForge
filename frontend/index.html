@@ -9,8 +9,10 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/inspector.css">
+  <link rel="stylesheet" href="/processes.css">
   <script src="/theme.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/processes.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -23,6 +25,7 @@
       <nav class="nav-list" id="nav">
         <button class="nav-link active" data-view="overview"><span class="nav-symbol">◫</span>Overview</button>
         <button class="nav-link" data-view="events"><span class="nav-symbol">⌕</span>Event explorer</button>
+        <button class="nav-link" data-view="processes"><span class="nav-symbol">⌘</span>Process explorer</button>
         <button class="nav-link" data-view="timeline"><span class="nav-symbol">◷</span>Timeline</button>
         <button class="nav-link" data-view="findings"><span class="nav-symbol">◇</span>Findings</button>
         <button class="nav-link" data-view="evidence"><span class="nav-symbol">▤</span>Evidence vault</button>
@@ -30,7 +33,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="storage-note"><span class="status-dot"></span><div><b>LOCAL WORKSPACE</b><small>Evidence stays on your host</small></div></div>
-        <div class="sidebar-version">TRACEFORGE <span>v0.1.0 · MVP</span></div>
+        <div class="sidebar-version">TRACEFORGE <span>v0.2.0 · MVP</span></div>
       </div>
     </aside>
 

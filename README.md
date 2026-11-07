@@ -2,16 +2,18 @@
 
 **TraceForge is a local-first, self-hosted Windows event-log investigation dashboard.** Preserve native EVTX files, index their events, find triage leads, explore timelines, and export evidence-linked case reports. Optionally run [WithSecure Chainsaw](https://github.com/WithSecureOpenSource/chainsaw) with your own rule packs.
 
-> **Status: v0.1.0 MVP.** A usable starting point for individual analysts and DFIR labs, not a production-grade multi-user SOC platform. No authentication is implemented: **do not expose this deployment to the public internet.**
+> **Status: v0.2.0 MVP.** A usable starting point for individual analysts and DFIR labs, not a production-grade multi-user SOC platform. No authentication is implemented: **do not expose this deployment to the public internet.**
 
 ## Features
 
-- Responsive, build-free dark web dashboard with six investigative views
+- Responsive, build-free, themeable web dashboard with seven investigative views
 - Create cases and upload native Windows `.evtx` files (25 MB per upload)
 - Preserve original uploaded bytes under generated IDs, compute SHA-256 at ingestion
 - Normalize Windows event metadata while retaining original record XML
-- Search Event ID, host, provider, account, and event payload; inspect exact source records
+- Search Event IDs, host, provider, account, and payload; filter by actual EventData field names and values, with source-linked inspection
 - Chronological timeline, event-frequency charts, built-in triage findings
+- Search Windows Security (4688) and Sysmon (1) process-creation events without rebuilding existing case data
+- Pivot from any event to same-host nearby events and conservative process parent/child candidates
 - Export an investigation report as Markdown with evidence IDs and hashes
 - Optional Chainsaw hunting; stores its **raw JSON output** for review (not falsely mapped to internal findings)
 - Single Docker service, SQLite database, persistent evidence volume, non-root container
@@ -22,7 +24,8 @@
 | View | Purpose |
 | --- | --- |
 | Overview | Case metrics, activity chart, frequent event IDs, latest findings |
-| Event explorer | Full-text search, Event ID filter, time ordering, original XML |
+| Event explorer | Text, host, Event ID and dynamic EventData field filters; source-linked records |
+| Process explorer | Cross-host executable, command-line, PID and account search for supported process-create events |
 | Timeline | Chronological view of up to the first 200 indexed events |
 | Findings | Clearly labeled **triage** observations, linked back to records |
 | Evidence vault | Source filename, size, upload status, SHA-256 fingerprint |
@@ -39,6 +42,27 @@ The dashboard now provides an **Appearance** panel in the top bar:
 - Settings for light and dark modes are stored separately in the browser's `localStorage`. They survive refreshes but are **not** shared across browsers or users. **Reset current mode** restores the default colors for the active mode.
 
 Clicking an event now opens a **full-screen forensic workspace** instead of a side drawer. The Overview tab shows process lineage, execution details, and a dedicated evidence-provenance column using readable label/value rows rather than clusters of small cards. Large **All fields**, **JSON**, and **Original XML** views use the available screen width; JSON and XML support line wrapping and copying. Use **Back to events** or Escape to return. Event 4688 rows also show the process basename and command-line preview in the explorer. Your saved appearance palette is retained.
+
+## Process exploration and evidence correlation (v0.2)
+
+Select **Process explorer** in the sidebar to search process creation records from any indexed Windows Security Event 4688 or Sysmon Event 1 log. Search executable paths, command lines, account names, hostnames or PIDs, and filter by machine. Results are generated from the actual evidence; there are no preprogrammed names, flags, hostnames or suspect processes. Your already uploaded evidence is searchable immediately—no re-upload or database migration is required.
+
+The full-screen event inspector includes **Related activity**, which shows:
+
+- Nearby same-host events within a ±10-minute window, clearly marked as temporal context, **not causation**.
+- Matching Sysmon `ProcessGuid` / `ParentProcessGuid` relationships, when those GUIDs were recorded.
+- **Potential**, not confirmed, parent/child relationships inferred from Security 4688 or Sysmon PIDs, with host, timing and reported parent-image checks. PIDs are routinely reused. PID-only links can be ambiguous.
+- A note when parent evidence is missing, correlation is unsupported, or candidate scanning reaches its safety limit.
+
+Cross-source schema support is intentionally conservative: a process must have a supported provider and event ID; no parent is fabricated just because its image name appears in the child record. The candidate window is limited to 24 hours and the correlation scan to 10,000 process records on the same host. Both bounds can omit legitimate long-running parent processes. This first version is **investigation assistance, not a complete EDR-grade process tree**.
+
+**Event explorer** also has advanced filters populated from field names actually found in that case's EventData objects. You can pivot on unusual or vendor-specific fields without hardcoding a fixed set of keys.
+
+API endpoints:
+- `GET /api/cases/{case_id}/processes?q=&host=&page=&limit=&order=`
+- `GET /api/cases/{case_id}/events/{row_id}/context?window_minutes=&limit=`
+- `GET /api/cases/{case_id}/field-keys` and `GET /api/cases/{case_id}/hosts`
+- Existing `GET /api/cases/{case_id}/events` accepts `host`, `field_key`, and `field_value`.
 
 ## Quick start (Docker)
 

@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from .chainsaw import configuration, hunt
 from .db import data_dir, database, initialize, now
 from .evtx import TRIAGE_RULES, iter_evtx_records
+from .processes import router as processes_router
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_EVENTS_PER_FILE = 100_000
@@ -26,7 +27,8 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="TraceForge", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="TraceForge", version="0.2.0", lifespan=lifespan)
+app.include_router(processes_router)
 
 
 class CaseInput(BaseModel):
@@ -44,7 +46,7 @@ def ensure_case(case_id: str) -> dict:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
 
 
 @app.get("/api/cases")
@@ -172,17 +174,59 @@ def list_evidence(case_id: str):
     return [dict(row) for row in rows]
 
 
+@app.get("/api/cases/{case_id}/field-keys")
+def list_field_keys(case_id: str):
+    """Discover actual EventData field names instead of assuming a sample schema."""
+    ensure_case(case_id)
+    with database() as db:
+        rows = db.execute("""
+            SELECT DISTINCT fields.key
+            FROM events AS e, json_each(e.data_json) AS fields
+            WHERE e.case_id=? AND fields.key IS NOT NULL
+            ORDER BY fields.key LIMIT 300
+        """, (case_id,)).fetchall()
+    return [row["key"] for row in rows]
+
+
+@app.get("/api/cases/{case_id}/hosts")
+def list_hosts(case_id: str):
+    ensure_case(case_id)
+    with database() as db:
+        rows = db.execute("""
+            SELECT DISTINCT host FROM events
+            WHERE case_id=? AND host != ''
+            ORDER BY host LIMIT 300
+        """, (case_id,)).fetchall()
+    return [row["host"] for row in rows]
+
+
 @app.get("/api/cases/{case_id}/events")
 def list_events(case_id: str, q: str = Query(default="", max_length=200),
                 event_id: int | None = None, page: int = Query(default=1, ge=1),
                 limit: int = Query(default=50, ge=1, le=200),
-                order: str = Query(default="desc", pattern="^(asc|desc)$")):
+                order: str = Query(default="desc", pattern="^(asc|desc)$"),
+                host: str = Query(default="", max_length=255),
+                field_key: str = Query(default="", max_length=200),
+                field_value: str = Query(default="", max_length=250)):
     ensure_case(case_id)
     where = ["case_id = ?"]
     params: list = [case_id]
     if event_id is not None:
         where.append("event_id = ?")
         params.append(event_id)
+    if host:
+        where.append("host = ?")
+        params.append(host)
+    if field_value and not field_key:
+        raise HTTPException(422, "Choose a field name when filtering by field value")
+    if field_key:
+        term = "%" + field_value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        where.append("""EXISTS(
+            SELECT 1 FROM json_each(events.data_json) AS field
+            WHERE field.key = ?
+              AND CAST(field.value AS TEXT) LIKE ? ESCAPE '\'
+        )""")
+        params.extend([field_key, term])
     if q:
         where.append("""(summary LIKE ? OR host LIKE ? OR account LIKE ?
                         OR provider LIKE ? OR data_json LIKE ?)""")

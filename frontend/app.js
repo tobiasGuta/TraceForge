@@ -2,10 +2,10 @@
 'use strict';
 
 const state = { cases: [], caseId: null, view: 'overview', page: 1, query: '',
-                eventId: '', order: 'desc', renderToken: 0 };
+                eventId: '', host: '', fieldKey: '', fieldValue: '', order: 'desc', renderToken: 0 };
 const content = document.getElementById('content');
 const labels = {
-  overview: 'Overview', events: 'Event explorer', timeline: 'Timeline',
+  overview: 'Overview', events: 'Event explorer', processes: 'Process explorer', timeline: 'Timeline',
   findings: 'Findings', evidence: 'Evidence vault', chainsaw: 'Chainsaw engine'
 };
 const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (char) =>
@@ -158,27 +158,54 @@ function eventTable(items) {
     items.map(eventRow).join('') + '</tbody></table></div>';
 }
 async function renderEvents() {
-  const params = new URLSearchParams({ q: state.query, page: String(state.page),
-    limit: '50', order: state.order });
-  if (state.eventId) params.set('event_id', state.eventId);
-  const result = await api(caseUrl('/events?' + params));
-  let html = titleBlock('SEARCH & FILTER', 'Event explorer',
-    'Search normalized event fields without losing the underlying XML.');
-  html += '<div class="panel"><div class="filter-bar"><label class="filter-label">Text search<input id="eventSearch" placeholder="Username, process, host, command…" value="' +
-    esc(state.query) + '"></label><label class="filter-label filter-small">Event ID<input id="eventIdFilter" type="number" min="0" placeholder="e.g. 4624" value="' +
-    esc(state.eventId) + '"></label><label class="filter-label filter-small">Sort<select id="eventOrder"><option value="desc"' +
-    (state.order === 'desc' ? ' selected' : '') + '>Newest first</option><option value="asc"' +
-    (state.order === 'asc' ? ' selected' : '') + '>Oldest first</option></select></label>' +
-    '<button class="button button-primary" data-action="filter">Search</button></div>' +
-    '<div class="results-line"><b>' + num(result.total) + '</b> matching events</div>' +
-    (result.items.length ? eventTable(result.items) :
-      empty('No matching events', 'Try a different query or upload more EVTX evidence.')) +
+  const params=new URLSearchParams({q:state.query,page:String(state.page),
+    limit:'50',order:state.order});
+  if (state.eventId) params.set('event_id',state.eventId);
+  if (state.host) params.set('host',state.host);
+  if (state.fieldKey) params.set('field_key',state.fieldKey);
+  if (state.fieldValue) params.set('field_value',state.fieldValue);
+  const [result,hosts,fields] = await Promise.all([
+    api(caseUrl('/events?' + params)),
+    api(caseUrl('/hosts')),
+    api(caseUrl('/field-keys'))
+  ]);
+  let html=titleBlock('SEARCH & FILTER','Event explorer',
+    'Search all indexed events, pivot on a host, or filter by any actual field in the evidence.');
+  html+='<section class="panel"><div class="filter-bar">' +
+    '<label class="filter-label">Search events<input id="eventSearch" value="' +
+    esc(state.query) + '" placeholder="Username, command, address, process or text"></label>' +
+    '<label class="filter-label filter-small">Event ID<input id="eventIdFilter" type="number" min="0" value="' +
+    esc(state.eventId) + '" placeholder="Any Event ID"></label>' +
+    '<label class="filter-label filter-small">Order<select id="eventOrder"><option value="desc"' +
+    (state.order==='desc'?' selected':'') + '>Newest first</option><option value="asc"' +
+    (state.order==='asc'?' selected':'') + '>Oldest first</option></select></label>' +
+    '<button type="button" class="button button-primary" data-action="filter">Search</button></div>';
+  const hostOptions='<option value="">All hosts</option>' +
+    hosts.map((host)=>'<option value="' + esc(host) + '"' +
+      (host===state.host?' selected':'')+'>'+esc(host)+'</option>').join('');
+  const keyOptions='<option value="">Any field</option>' +
+    fields.map((key)=>'<option value="' + esc(key) + '"' +
+      (key===state.fieldKey?' selected':'')+'>'+esc(key)+'</option>').join('');
+  html+='<details class="advanced-filters"' +
+    (state.host||state.fieldKey||state.fieldValue?' open':'') + '>' +
+    '<summary>Advanced evidence filters <span>Host · source field name · exact field contents</span></summary>' +
+    '<div class="advanced-filter-grid">' +
+    '<label class="filter-label">Computer / host<select id="eventHost">' + hostOptions + '</select></label>' +
+    '<label class="filter-label">EventData field<select id="eventFieldKey">' + keyOptions + '</select></label>' +
+    '<label class="filter-label">Field contains<input id="eventFieldValue" value="' +
+    esc(state.fieldValue) + '" placeholder="Literal text (not a regex)"></label>' +
+    '</div><p class="filter-hint">Field names are discovered from the uploaded events. ' +
+    'A field without a value filters for records where that field exists.</p></details>' +
+    '<div class="results-line"><b>' + num(result.total) +
+    '</b> matching records <button class="clear-search" type="button" data-action="clear-event-filters">Clear filters</button></div>' +
+    (result.items.length?eventTable(result.items):
+      empty('No matching events','Change a filter or upload additional EVTX evidence.')) +
     '<div class="pagination"><span>Page ' + state.page + ' of ' +
-    Math.max(1, Math.ceil(result.total / 50)) + '</span><div>' +
-    '<button class="button button-outline button-sm" data-action="previous" ' +
-    (state.page === 1 ? 'disabled' : '') + '>Previous</button> ' +
-    '<button class="button button-outline button-sm" data-action="next" ' +
-    (state.page * 50 >= result.total ? 'disabled' : '') + '>Next</button></div></div></div>';
+    Math.max(1,Math.ceil(result.total/50))+'</span><div>' +
+    '<button class="button button-outline button-sm" data-action="previous"' +
+    (state.page===1?' disabled':'')+'>Previous</button> ' +
+    '<button class="button button-outline button-sm" data-action="next"' +
+    (state.page*50>=result.total?' disabled':'')+'>Next</button></div></div></section>';
   return html;
 }
 async function renderTimeline() {
@@ -271,6 +298,7 @@ async function render() {
   try {
     let html;
     if (state.view === 'events') html = await renderEvents();
+    else if (state.view === 'processes') html = await renderProcesses();
     else if (state.view === 'timeline') html = await renderTimeline();
     else if (state.view === 'findings') html = await renderFindings();
     else if (state.view === 'evidence') html = await renderEvidence();
@@ -335,6 +363,8 @@ function inspectorOverview(record) {
       esc(process ? basename(process) : 'Not recorded') + '</strong><small>' +
       esc(process || 'Source event does not include the process image') + '</small></div></div>' +
       '</section>';
+    if (process) html += '<div class="process-pivot-bar"><button type="button" class="button button-outline" data-process-pivot="' +
+      esc(process) + '">⌕ Find other executions of this process</button></div>';
     html += '<section class="inspector-section">' +
       sectionHeading('Execution details', 'Recorded identifiers and user context') +
       '<dl class="inspector-detail-list">' +
@@ -410,16 +440,19 @@ function renderInspector() {
     (command?'<div class="inspector-command-preview"><div class="command-title"><span>RECORDED COMMAND LINE</span>' +
     '<button type="button" data-action="copy-event" data-format="command">Copy command</button></div>' +
     '<code>' + esc(command) + '</code></div>':'') + '</div>';
-  const tabs=[['overview','Overview'],['fields','All fields'],['json','JSON'],['xml','Original XML']];
+  const tabs=[['overview','Overview'],['related','Related activity'],['fields','All fields'],['json','JSON'],['xml','Original XML']];
   const nav='<nav class="inspector-tabs" role="tablist" aria-label="Event views">' +
     tabs.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+
       (key===activeEventTab)+'" data-event-tab="'+key+'" class="'+
       (key===activeEventTab?'selected':'')+'">'+label+'</button>').join('')+'</nav>';
-  const panel=activeEventTab==='fields'?inspectorFieldList(r):
+  const panel=activeEventTab==='related' ?
+    '<div id="eventContextMount" class="context-loading"><span class="spinner"></span><p>Loading source-based correlations…</p></div>' :
+    activeEventTab==='fields'?inspectorFieldList(r):
     (activeEventTab==='json'||activeEventTab==='xml')?inspectorSource(r,activeEventTab):
     inspectorOverview(r);
   document.getElementById('eventDetails').innerHTML=summary+nav+
     '<div class="inspector-scroll" role="tabpanel" tabindex="0">'+panel+'</div>';
+  if (activeEventTab==='related') void loadEventContext(r.id);
 }
 async function showEvent(rowId) {
   try {
@@ -427,7 +460,7 @@ async function showEvent(rowId) {
     activeEventTab='overview';
     eventSourceWrap=true;
     renderInspector();
-    showDialog('eventDialog');
+    if (!document.getElementById('eventDialog').open) showDialog('eventDialog');
   } catch(error){notify(error.message,true);}
 }
 document.addEventListener('click', async (event) => {
@@ -461,8 +494,15 @@ document.addEventListener('click', async (event) => {
   if (action === 'filter') {
     state.query = document.getElementById('eventSearch').value.trim();
     state.eventId = document.getElementById('eventIdFilter').value;
+    state.host = document.getElementById('eventHost').value;
+    state.fieldKey = document.getElementById('eventFieldKey').value;
+    state.fieldValue = document.getElementById('eventFieldValue').value.trim();
     state.order = document.getElementById('eventOrder').value;
     state.page = 1;
+    return render();
+  }
+  if (action === 'clear-event-filters') {
+    Object.assign(state,{query:'',eventId:'',host:'',fieldKey:'',fieldValue:'',page:1});
     return render();
   }
   if (action === 'run-hunt') {
@@ -485,7 +525,8 @@ document.addEventListener('keydown', (event) => {
 });
 document.getElementById('casePicker').addEventListener('change', (event) => {
   state.caseId = event.target.value || null;
-  state.page = 1;
+  Object.assign(state,{page:1,query:'',eventId:'',host:'',fieldKey:'',fieldValue:''});
+  processState.query=''; processState.host=''; processState.page=1;
   render();
 });
 document.getElementById('evtxFile').addEventListener('change', (event) => {
