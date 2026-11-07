@@ -38,7 +38,7 @@ The dashboard now provides an **Appearance** panel in the top bar:
 - Watch changes live; a contrast indicator warns when panel text falls below a 4.5:1 ratio.
 - Settings for light and dark modes are stored separately in the browser's `localStorage`. They survive refreshes but are **not** shared across browsers or users. **Reset current mode** restores the default colors for the active mode.
 
-Clicking an event now opens a **right-hand inspector** with a summary, timestamp, and (when present) command line visible immediately. Four tabs — **Overview**, **All fields**, **JSON**, **Original XML** — keep the raw source accessible without stacking huge data blocks in one scrolling dialog. Event 4688 rows also show the executed process basename and command-line preview directly in the explorer.
+Clicking an event now opens a **full-screen forensic workspace** instead of a side drawer. The Overview tab shows process lineage, execution details, and a dedicated evidence-provenance column using readable label/value rows rather than clusters of small cards. Large **All fields**, **JSON**, and **Original XML** views use the available screen width; JSON and XML support line wrapping and copying. Use **Back to events** or Escape to return. Event 4688 rows also show the process basename and command-line preview in the explorer. Your saved appearance palette is retained.
 
 ## Quick start (Docker)
 

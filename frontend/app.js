@@ -286,96 +286,149 @@ async function render() {
   }
 }
 
-/* Evidence-first inspector: decoded fields up front, raw source one click away. */
+/* Full-screen forensic event workspace. Keep original evidence available as-is. */
 let activeEvent = null;
 let activeEventTab = 'overview';
-const inspectValue = (v) => v == null || v === '' ? '—' :
-  (typeof v === 'object' ? JSON.stringify(v) : String(v));
-const eventField = (name, value, wide = false) =>
-  '<div class="inspector-field' + (wide ? ' inspector-field-wide' : '') +
-  '"><span>' + esc(name) + '</span><strong title="' + esc(inspectValue(value)) +
-  '">' + esc(inspectValue(value)) + '</strong></div>';
-const basename = (path) => String(path || '').replace(/\\/g, '/').split('/').pop();
+let eventSourceWrap = true;
 
+const inspectValue = (value) => value == null || value === '' ? '—' :
+  typeof value === 'object' ? JSON.stringify(value) : String(value);
+const basename = (path) => String(path || '').replace(/\\/g, '/').split('/').pop();
+function detailRow(label, value) {
+  return '<div class="inspector-detail-row"><dt>' + esc(label) + '</dt><dd>' +
+    esc(inspectValue(value)) + '</dd></div>';
+}
+function sectionHeading(title, description) {
+  return '<header class="inspector-section-heading"><h3>' + esc(title) + '</h3>' +
+    (description ? '<p>' + esc(description) + '</p>' : '') + '</header>';
+}
 function inspectorOverview(record) {
-  const d = record.data || {};
-  const isProcess = [4688, 1].includes(Number(record.event_id));
-  const process = d.NewProcessName || d.Image || d.ProcessName;
-  const parent = d.ParentProcessName || d.ParentImage;
-  const command = d.CommandLine || d.ScriptBlockText;
-  const principal = [d.SubjectDomainName, d.SubjectUserName].filter(Boolean).join('\\') ||
-                    [d.TargetDomainName, d.TargetUserName].filter(Boolean).join('\\') ||
-                    record.account;
-  let s = '<div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>' +
-    (isProcess ? 'Process execution' : 'Event summary') + '</div><div class="inspector-field-grid">';
-  if (process) s += eventField('Process image', process, true);
-  if (command) s += eventField('Command line', command, true);
-  if (parent) s += eventField('Parent process', parent, true);
-  if (d.NewProcessId) s += eventField('New process ID', d.NewProcessId);
-  if (d.ProcessId) s += eventField('Creator process ID', d.ProcessId);
-  if (d.SubjectLogonId) s += eventField('Subject logon ID', d.SubjectLogonId);
-  if (d.TokenElevationType) s += eventField('Token elevation', d.TokenElevationType);
-  if (d.MandatoryLabel) s += eventField('Mandatory label', d.MandatoryLabel);
-  if (principal) s += eventField('Security principal', principal, true);
-  if (!process && !command && !parent) {
-    const keys = Object.keys(d).slice(0, 6);
-    if (keys.length) s += keys.map((key) => eventField(key, d[key])).join('');
-    else s += '<div class="inspector-hint">No decoded event payload available.</div>';
+  const d=record.data||{};
+  const isProcess=[4688,1].includes(Number(record.event_id));
+  const process=d.NewProcessName||d.Image||d.ProcessName;
+  const parent=d.ParentProcessName||d.ParentImage;
+  const account=[d.SubjectDomainName,d.SubjectUserName].filter(Boolean).join('\\') ||
+    [d.TargetDomainName,d.TargetUserName].filter(Boolean).join('\\') || record.account;
+  const processFields = [
+    ['New process ID',d.NewProcessId||d.ProcessId],
+    ['Parent / creator process ID',d.ProcessId||d.ParentProcessId],
+    ['Logon session',d.SubjectLogonId||d.TargetLogonId],
+    ['Token elevation',d.TokenElevationType],
+    ['Integrity label',d.MandatoryLabel],
+    ['Security principal',account]
+  ].filter(([,v]) => v != null && v !== '');
+  const otherFields = Object.entries(d).filter(([key]) => ![
+    'NewProcessName','Image','ProcessName','ParentProcessName','ParentImage',
+    'CommandLine','ScriptBlockText','NewProcessId','ProcessId','ParentProcessId',
+    'SubjectLogonId','TargetLogonId','TokenElevationType','MandatoryLabel',
+    'SubjectDomainName','SubjectUserName','TargetDomainName','TargetUserName'
+  ].includes(key));
+  let html = '<div class="inspector-workspace"><div class="inspector-primary">';
+  if (isProcess) {
+    html += '<section class="inspector-section">' +
+      sectionHeading('Process lineage', 'Parent and child execution context from the recorded event') +
+      '<div class="inspector-lineage"><div class="lineage-process"><span>PARENT PROCESS</span><strong>' +
+      esc(parent ? basename(parent) : 'Not recorded') + '</strong><small>' +
+      esc(parent || 'Source event does not include the parent image') + '</small></div>' +
+      '<div class="lineage-connector" aria-hidden="true">→</div>' +
+      '<div class="lineage-process lineage-child"><span>CREATED PROCESS</span><strong>' +
+      esc(process ? basename(process) : 'Not recorded') + '</strong><small>' +
+      esc(process || 'Source event does not include the process image') + '</small></div></div>' +
+      '</section>';
+    html += '<section class="inspector-section">' +
+      sectionHeading('Execution details', 'Recorded identifiers and user context') +
+      '<dl class="inspector-detail-list">' +
+      (processFields.length ? processFields.map(([key,value]) => detailRow(key,value)).join('') :
+        '<p class="inspector-hint">No additional execution identifiers recorded.</p>') +
+      '</dl></section>';
+  } else {
+    const preview=Object.entries(d).slice(0,9);
+    html += '<section class="inspector-section">' +
+      sectionHeading('Event information','Decoded event properties') +
+      '<dl class="inspector-detail-list">' +
+      (preview.length ? preview.map(([key,value]) => detailRow(key,value)).join('') :
+        '<p class="inspector-hint">There are no decoded fields for this event.</p>') +
+      '</dl></section>';
   }
-  s += '</div></div><div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>Record provenance</div><div class="inspector-field-grid">' +
-    eventField('Host', record.host) + eventField('Channel', record.channel) +
-    eventField('Provider', record.provider, true) + eventField('Record ID', record.record_id) +
-    eventField('Evidence ID', record.evidence_id, true) + '</div></div>';
-  return s;
+  if (isProcess && otherFields.length) {
+    html += '<section class="inspector-section">' +
+      sectionHeading('Additional properties', 'Other fields preserved in the event') +
+      '<dl class="inspector-detail-list">' +
+      otherFields.slice(0,12).map(([key,value]) => detailRow(key,value)).join('') +
+      '</dl></section>';
+  }
+  html += '</div><aside class="inspector-context"><div class="context-sticky">' +
+    sectionHeading('Source & provenance', 'Traceable back to the ingested EVTX file') +
+    '<dl class="inspector-detail-list">' +
+    detailRow('Event ID',record.event_id) +
+    detailRow('Record ID',record.record_id) +
+    detailRow('Timestamp',record.timestamp) +
+    detailRow('Computer',record.host) +
+    detailRow('Channel',record.channel) +
+    detailRow('Provider',record.provider) +
+    detailRow('Account',record.account) +
+    detailRow('Evidence ID',record.evidence_id) +
+    '</dl><p class="inspector-evidence-note">This is a recorded event, not a verdict of malicious activity. Review surrounding events before drawing conclusions.</p>' +
+    '</div></aside></div>';
+  return html;
 }
 function inspectorFieldList(record) {
-  const fields = Object.entries(record.data || {});
-  if (!fields.length) return '<div class="inspector-hint">This event has no decoded EventData fields.</div>';
-  return '<div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>All decoded event fields <span class="section-count">' +
-    fields.length + ' fields</span></div><div class="inspector-field-grid">' +
-    fields.map(([key,value]) => eventField(key,value,String(value).length > 80)).join('') + '</div></div>';
+  const fields=Object.entries(record.data||{});
+  return '<div class="inspector-reading"><div class="inspector-section">' +
+    sectionHeading('Decoded event fields', 'All ' + fields.length + ' fields extracted from the source record') +
+    (fields.length ? '<dl class="inspector-detail-list inspector-all-fields">' +
+      fields.map(([key,value]) => detailRow(key,value)).join('') + '</dl>' :
+      '<p class="inspector-hint">This event has no decoded EventData fields.</p>') +
+    '</div></div>';
 }
-function inspectorSource(record, type) {
-  const payload = type === 'xml' ? record.raw_xml : JSON.stringify(record.data || {},null,2);
-  return '<div class="source-toolbar"><div><strong>' +
-    (type === 'xml' ? 'Original Windows event XML' : 'Decoded EventData JSON') +
-    '</strong><small>Preserved for evidence review</small></div>' +
-    '<button class="button button-outline button-sm" data-action="copy-event" data-format="' +
-    type + '">Copy ' + type.toUpperCase() + '</button></div><pre class="inspector-source"><code>' +
-    esc(payload || '') + '</code></pre>';
+function inspectorSource(record,type) {
+  const raw=type==='xml'?record.raw_xml:JSON.stringify(record.data||{},null,2);
+  return '<div class="inspector-reading inspector-reading-code">' +
+    '<div class="source-toolbar"><div><strong>' +
+    (type==='xml'?'Original Windows event XML':'Decoded EventData JSON') +
+    '</strong><small>Source is shown without changing the underlying evidence</small></div>' +
+    '<div class="source-actions"><button type="button" class="button button-outline button-sm" data-action="toggle-wrap" aria-pressed="' +
+    eventSourceWrap + '">' + (eventSourceWrap ? 'Disable wrap':'Wrap lines') + '</button>' +
+    '<button type="button" class="button button-outline button-sm" data-action="copy-event" data-format="' +
+    type + '">Copy ' + type.toUpperCase() + '</button></div></div>' +
+    '<pre class="inspector-source ' + (eventSourceWrap?'source-wrap':'source-nowrap') +
+    '"><code>' + esc(raw||'') + '</code></pre></div>';
 }
 function renderInspector() {
-  if (!activeEvent) return;
-  const record=activeEvent,d=record.data||{},image=d.NewProcessName||d.Image||d.ProcessName,
-        command=d.CommandLine||d.ScriptBlockText;
-  document.getElementById('inspectorTitle').textContent=record.summary||'Event details';
-  document.getElementById('inspectorSubtitle').textContent =
-    (record.host||'Unknown host')+' · Event '+(record.event_id??'—')+' · Record '+(record.record_id||'—');
-  const snapshot='<div class="inspector-snapshot"><div class="inspector-event-info"><div class="inspector-event-label">' +
-    '<span class="inspector-event-id">EVENT '+esc(record.event_id??'—')+'</span><span>'+
-    esc(formatTime(record.timestamp))+'</span></div><h3>'+
-    esc(image?basename(image):record.summary)+'</h3><p>'+
-    esc(image||record.summary||'')+'</p></div>'+
-    (command?'<div class="inspector-command-preview"><div class="command-title"><span>COMMAND LINE</span>'+
-    '<button type="button" data-action="copy-event" data-format="command">Copy</button></div><code>'+
-    esc(command)+'</code></div>':'')+'</div>';
+  if(!activeEvent)return;
+  const r=activeEvent,d=r.data||{},image=d.NewProcessName||d.Image||d.ProcessName;
+  const command=d.CommandLine||d.ScriptBlockText;
+  document.getElementById('inspectorTitle').textContent=image ? basename(image) : (r.summary||'Event details');
+  document.getElementById('inspectorSubtitle').textContent=
+    (r.host||'Unknown computer') + ' · ' + (r.channel||'Windows Event Log') + ' · Record ' + (r.record_id||'—');
+  const summary='<div class="inspector-snapshot"><div class="inspector-identity">' +
+    '<div class="inspector-event-label"><span class="inspector-event-id">EVENT ' +
+    esc(r.event_id??'—') + '</span><span>' + esc(formatTime(r.timestamp)) + '</span>' +
+    '<span class="inspector-record-label">RECORD ' + esc(r.record_id||'—') + '</span></div>' +
+    '<h3>' + esc(image?basename(image):(r.summary||'Windows event')) + '</h3>' +
+    '<p>' + esc(image||r.summary||'') + '</p></div>' +
+    (command?'<div class="inspector-command-preview"><div class="command-title"><span>RECORDED COMMAND LINE</span>' +
+    '<button type="button" data-action="copy-event" data-format="command">Copy command</button></div>' +
+    '<code>' + esc(command) + '</code></div>':'') + '</div>';
   const tabs=[['overview','Overview'],['fields','All fields'],['json','JSON'],['xml','Original XML']];
-  const nav='<div class="inspector-tabs" role="tablist" aria-label="Event detail views">'+
+  const nav='<nav class="inspector-tabs" role="tablist" aria-label="Event views">' +
     tabs.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+
       (key===activeEventTab)+'" data-event-tab="'+key+'" class="'+
-      (key===activeEventTab?'selected':'')+'">'+label+'</button>').join('')+'</div>';
-  const panel=activeEventTab==='fields'?inspectorFieldList(record):
-    ['json','xml'].includes(activeEventTab)?inspectorSource(record,activeEventTab):inspectorOverview(record);
-  document.getElementById('eventDetails').innerHTML=snapshot+nav+
+      (key===activeEventTab?'selected':'')+'">'+label+'</button>').join('')+'</nav>';
+  const panel=activeEventTab==='fields'?inspectorFieldList(r):
+    (activeEventTab==='json'||activeEventTab==='xml')?inspectorSource(r,activeEventTab):
+    inspectorOverview(r);
+  document.getElementById('eventDetails').innerHTML=summary+nav+
     '<div class="inspector-scroll" role="tabpanel" tabindex="0">'+panel+'</div>';
 }
 async function showEvent(rowId) {
   try {
     activeEvent=await api(caseUrl('/events/'+encodeURIComponent(rowId)));
     activeEventTab='overview';
+    eventSourceWrap=true;
     renderInspector();
     showDialog('eventDialog');
-  } catch(error) { notify(error.message,true); }
+  } catch(error){notify(error.message,true);}
 }
 document.addEventListener('click', async (event) => {
   const tab = event.target.closest('[data-event-tab]');
@@ -392,6 +445,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'new-case') return showDialog('caseDialog');
   if (action === 'upload') return showDialog('uploadDialog');
   if (action === 'close-dialog') return closeDialogs();
+  if (action === 'toggle-wrap' && activeEvent) { eventSourceWrap = !eventSourceWrap; renderInspector(); return; }
   if (action === 'copy-event' && activeEvent) {
     const value=target.dataset.format==='xml'?activeEvent.raw_xml:
       target.dataset.format==='json'?JSON.stringify(activeEvent.data||{},null,2):
