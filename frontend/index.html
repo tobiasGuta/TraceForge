@@ -7,6 +7,8 @@
   <meta name="description" content="TraceForge — evidence-driven Windows forensic investigation.">
   <title>TraceForge · DFIR Workspace</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/theme.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -35,6 +37,8 @@
       <header class="topbar">
         <div class="breadcrumbs"><span class="crumb-muted">Workspace</span><span class="crumb-separator">/</span><span id="crumb">Overview</span></div>
         <div class="top-actions">
+          <button type="button" class="button button-outline button-sm theme-mode-toggle" id="themeModeToggle" title="Switch light/dark mode" aria-label="Switch light/dark mode">☼ <span id="modeLabel">Light</span></button>
+          <button type="button" class="button button-outline button-sm appearance-trigger" id="appearanceButton" aria-haspopup="dialog" aria-controls="appearanceDialog">◐ <span>Appearance</span></button>
           <label class="sr-only" for="casePicker">Active case</label>
           <select id="casePicker" aria-label="Select active case"><option value="">No cases yet</option></select>
           <button class="button button-outline button-sm" data-action="new-case">+ New case</button>
@@ -70,9 +74,37 @@
     </form>
   </dialog>
 
-  <dialog id="eventDialog" class="modal modal-wide">
-    <div class="modal-head"><div><div class="eyebrow">SOURCE RECORD</div><h2>Event details</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close">×</button></div>
-    <div id="eventDetails"></div>
+  <dialog id="eventDialog" class="event-inspector" aria-labelledby="inspectorTitle">
+    <header class="inspector-header">
+      <div class="inspector-header-text"><div class="eyebrow">EVIDENCE INSPECTOR / ORIGINAL RECORD</div><h2 id="inspectorTitle">Event details</h2><p id="inspectorSubtitle">Inspect event metadata, decoded fields and original XML.</p></div>
+      <button type="button" class="icon-button inspector-close" data-action="close-dialog" aria-label="Close event inspector">×</button>
+    </header>
+    <div id="eventDetails" class="inspector-main"></div>
+  </dialog>
+
+  <dialog id="appearanceDialog" class="appearance-dialog" aria-labelledby="appearanceTitle">
+    <header class="appearance-header">
+      <div><div class="eyebrow">WORKSPACE PERSONALIZATION</div><h2 id="appearanceTitle">Make TraceForge yours</h2><p>Change the entire color system. Settings are saved on this browser.</p></div>
+      <button type="button" class="icon-button" id="appearanceClose" aria-label="Close appearance settings">×</button>
+    </header>
+    <div class="appearance-body">
+      <div class="appearance-subtitle">Color mode</div>
+      <div class="mode-options" role="group" aria-label="Color mode">
+        <button type="button" data-theme-mode="dark">☾ &nbsp; Dark</button>
+        <button type="button" data-theme-mode="light">☀ &nbsp; Light</button>
+        <button type="button" data-theme-mode="system">◐ &nbsp; System</button>
+      </div>
+      <div class="appearance-subtitle">Color palettes <span>Pick a starting point</span></div>
+      <div class="preset-list" id="themePresets"></div>
+      <div class="appearance-subtitle">Fine-tune every color <span>Live preview</span></div>
+      <div class="color-editor" id="themeColors"></div>
+      <div class="contrast-status" id="contrastStatus" role="status"></div>
+    </div>
+    <footer class="appearance-footer">
+      <button class="button button-outline" type="button" id="resetTheme">Reset current mode</button>
+      <span class="appearance-local">Stored locally · No account needed</span>
+      <button class="button button-primary" type="button" id="appearanceDone">Done</button>
+    </footer>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

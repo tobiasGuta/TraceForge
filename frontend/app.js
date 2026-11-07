@@ -105,11 +105,14 @@ function evidenceRow(e) {
     (e.error ? '<div class="file-error">' + esc(e.error) + '</div>' : '');
 }
 function eventRow(e) {
+  const process=e.data?.NewProcessName||e.data?.Image;
+  const detail=e.data?.CommandLine||e.provider||e.channel||'Windows event';
+  const observation=process?basename(process)+' · '+e.summary:e.summary;
   return '<tr class="event-row" data-action="event" data-id="' + e.id +
     '" tabindex="0" role="button" aria-label="Open event ' + esc(e.event_id) + '">' +
     '<td class="mono">' + esc(formatTime(e.timestamp)) + '</td>' +
     '<td>' + pill(e.event_id == null ? '—' : e.event_id, 'neutral') + '</td>' +
-    '<td><strong>' + esc(e.summary) + '</strong><small>' + esc(e.provider || e.channel || 'Windows event') + '</small></td>' +
+    '<td><strong>' + esc(observation) + '</strong><small title="' + esc(detail) + '">' + esc(detail) + '</small></td>' +
     '<td class="mono">' + esc(e.host || '—') + '</td>' +
     '<td class="mono">' + esc(e.account || '—') + '</td>' +
     '<td class="row-chevron">›</td></tr>';
@@ -282,24 +285,101 @@ async function render() {
     }
   }
 }
+
+/* Evidence-first inspector: decoded fields up front, raw source one click away. */
+let activeEvent = null;
+let activeEventTab = 'overview';
+const inspectValue = (v) => v == null || v === '' ? '—' :
+  (typeof v === 'object' ? JSON.stringify(v) : String(v));
+const eventField = (name, value, wide = false) =>
+  '<div class="inspector-field' + (wide ? ' inspector-field-wide' : '') +
+  '"><span>' + esc(name) + '</span><strong title="' + esc(inspectValue(value)) +
+  '">' + esc(inspectValue(value)) + '</strong></div>';
+const basename = (path) => String(path || '').replace(/\\/g, '/').split('/').pop();
+
+function inspectorOverview(record) {
+  const d = record.data || {};
+  const isProcess = [4688, 1].includes(Number(record.event_id));
+  const process = d.NewProcessName || d.Image || d.ProcessName;
+  const parent = d.ParentProcessName || d.ParentImage;
+  const command = d.CommandLine || d.ScriptBlockText;
+  const principal = [d.SubjectDomainName, d.SubjectUserName].filter(Boolean).join('\\') ||
+                    [d.TargetDomainName, d.TargetUserName].filter(Boolean).join('\\') ||
+                    record.account;
+  let s = '<div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>' +
+    (isProcess ? 'Process execution' : 'Event summary') + '</div><div class="inspector-field-grid">';
+  if (process) s += eventField('Process image', process, true);
+  if (command) s += eventField('Command line', command, true);
+  if (parent) s += eventField('Parent process', parent, true);
+  if (d.NewProcessId) s += eventField('New process ID', d.NewProcessId);
+  if (d.ProcessId) s += eventField('Creator process ID', d.ProcessId);
+  if (d.SubjectLogonId) s += eventField('Subject logon ID', d.SubjectLogonId);
+  if (d.TokenElevationType) s += eventField('Token elevation', d.TokenElevationType);
+  if (d.MandatoryLabel) s += eventField('Mandatory label', d.MandatoryLabel);
+  if (principal) s += eventField('Security principal', principal, true);
+  if (!process && !command && !parent) {
+    const keys = Object.keys(d).slice(0, 6);
+    if (keys.length) s += keys.map((key) => eventField(key, d[key])).join('');
+    else s += '<div class="inspector-hint">No decoded event payload available.</div>';
+  }
+  s += '</div></div><div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>Record provenance</div><div class="inspector-field-grid">' +
+    eventField('Host', record.host) + eventField('Channel', record.channel) +
+    eventField('Provider', record.provider, true) + eventField('Record ID', record.record_id) +
+    eventField('Evidence ID', record.evidence_id, true) + '</div></div>';
+  return s;
+}
+function inspectorFieldList(record) {
+  const fields = Object.entries(record.data || {});
+  if (!fields.length) return '<div class="inspector-hint">This event has no decoded EventData fields.</div>';
+  return '<div class="inspector-section"><div class="inspector-section-heading"><span class="section-marker"></span>All decoded event fields <span class="section-count">' +
+    fields.length + ' fields</span></div><div class="inspector-field-grid">' +
+    fields.map(([key,value]) => eventField(key,value,String(value).length > 80)).join('') + '</div></div>';
+}
+function inspectorSource(record, type) {
+  const payload = type === 'xml' ? record.raw_xml : JSON.stringify(record.data || {},null,2);
+  return '<div class="source-toolbar"><div><strong>' +
+    (type === 'xml' ? 'Original Windows event XML' : 'Decoded EventData JSON') +
+    '</strong><small>Preserved for evidence review</small></div>' +
+    '<button class="button button-outline button-sm" data-action="copy-event" data-format="' +
+    type + '">Copy ' + type.toUpperCase() + '</button></div><pre class="inspector-source"><code>' +
+    esc(payload || '') + '</code></pre>';
+}
+function renderInspector() {
+  if (!activeEvent) return;
+  const record=activeEvent,d=record.data||{},image=d.NewProcessName||d.Image||d.ProcessName,
+        command=d.CommandLine||d.ScriptBlockText;
+  document.getElementById('inspectorTitle').textContent=record.summary||'Event details';
+  document.getElementById('inspectorSubtitle').textContent =
+    (record.host||'Unknown host')+' · Event '+(record.event_id??'—')+' · Record '+(record.record_id||'—');
+  const snapshot='<div class="inspector-snapshot"><div class="inspector-event-info"><div class="inspector-event-label">' +
+    '<span class="inspector-event-id">EVENT '+esc(record.event_id??'—')+'</span><span>'+
+    esc(formatTime(record.timestamp))+'</span></div><h3>'+
+    esc(image?basename(image):record.summary)+'</h3><p>'+
+    esc(image||record.summary||'')+'</p></div>'+
+    (command?'<div class="inspector-command-preview"><div class="command-title"><span>COMMAND LINE</span>'+
+    '<button type="button" data-action="copy-event" data-format="command">Copy</button></div><code>'+
+    esc(command)+'</code></div>':'')+'</div>';
+  const tabs=[['overview','Overview'],['fields','All fields'],['json','JSON'],['xml','Original XML']];
+  const nav='<div class="inspector-tabs" role="tablist" aria-label="Event detail views">'+
+    tabs.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+
+      (key===activeEventTab)+'" data-event-tab="'+key+'" class="'+
+      (key===activeEventTab?'selected':'')+'">'+label+'</button>').join('')+'</div>';
+  const panel=activeEventTab==='fields'?inspectorFieldList(record):
+    ['json','xml'].includes(activeEventTab)?inspectorSource(record,activeEventTab):inspectorOverview(record);
+  document.getElementById('eventDetails').innerHTML=snapshot+nav+
+    '<div class="inspector-scroll" role="tabpanel" tabindex="0">'+panel+'</div>';
+}
 async function showEvent(rowId) {
   try {
-    const record = await api(caseUrl('/events/' + encodeURIComponent(rowId)));
-    const grid = [
-      ['Timestamp', formatTime(record.timestamp)], ['Event ID', record.event_id],
-      ['Record ID', record.record_id], ['Host', record.host], ['Channel', record.channel],
-      ['Provider', record.provider], ['Account', record.account], ['Evidence ID', record.evidence_id]
-    ];
-    document.getElementById('eventDetails').innerHTML =
-      '<p class="event-summary">' + esc(record.summary) + '</p><div class="detail-grid">' +
-      grid.map((entry) => '<div><small>' + esc(entry[0]) + '</small><strong>' +
-        esc(entry[1] || '—') + '</strong></div>').join('') + '</div>' +
-      '<h3>Event data</h3><pre class="code-box">' + esc(JSON.stringify(record.data, null, 2)) + '</pre>' +
-      '<h3>Original event XML</h3><pre class="code-box xml">' + esc(record.raw_xml) + '</pre>';
+    activeEvent=await api(caseUrl('/events/'+encodeURIComponent(rowId)));
+    activeEventTab='overview';
+    renderInspector();
     showDialog('eventDialog');
-  } catch (error) { notify(error.message, true); }
+  } catch(error) { notify(error.message,true); }
 }
 document.addEventListener('click', async (event) => {
+  const tab = event.target.closest('[data-event-tab]');
+  if (tab && activeEvent) { activeEventTab = tab.dataset.eventTab; renderInspector(); return; }
   const target = event.target.closest('[data-action], [data-view]');
   if (!target) return;
   if (target.dataset.view) {
@@ -312,6 +392,14 @@ document.addEventListener('click', async (event) => {
   if (action === 'new-case') return showDialog('caseDialog');
   if (action === 'upload') return showDialog('uploadDialog');
   if (action === 'close-dialog') return closeDialogs();
+  if (action === 'copy-event' && activeEvent) {
+    const value=target.dataset.format==='xml'?activeEvent.raw_xml:
+      target.dataset.format==='json'?JSON.stringify(activeEvent.data||{},null,2):
+      String(activeEvent.data?.CommandLine||activeEvent.data?.ScriptBlockText||'');
+    try { await navigator.clipboard.writeText(value); notify('Copied to clipboard.'); }
+    catch (_) { notify('Clipboard unavailable. Select and copy the source text instead.',true); }
+    return;
+  }
   if (action === 'retry') return render();
   if (action === 'event') return showEvent(target.dataset.id);
   if (action === 'previous' && state.page > 1) { state.page--; return render(); }
